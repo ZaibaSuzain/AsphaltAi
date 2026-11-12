@@ -1,0 +1,91 @@
+# AsphaltAi
+
+AI-assisted pothole reporting for Bengaluru roads. Upload a road photo, a pretrained YOLO model finds the potholes, and the report (location, pothole count and a severity estimate) is saved and shown on an interactive map.
+
+> **Status:** working prototype. Evaluation on a full labeled test set is still in progress, so **no accuracy figures are claimed yet**.
+
+![Detection page](docs/detect.png)
+![Dashboard map](docs/dashboard.png)
+
+## What it does
+
+- Upload a JPG or PNG road photo and see a box and a confidence score for every detected pothole
+- Detections the model is at least 50% sure about are counted as **confirmed**. Weaker ones are listed in a table but not counted, and can be drawn on the photo with a checkbox
+- **Rule-based severity estimate** (Low, Medium, High or Unclear) with a plain-English explanation of why
+- Reads the GPS location from the photo when it has one and suggests the locality from it (free OpenStreetMap lookup). Otherwise the location is typed in
+- A report needs a locality and coordinates inside Bengaluru before it can be saved, so reports with a missing or impossible location are refused
+- Saves reports to a local SQLite database
+- **Dashboard:** map of reports coloured by severity, a severity filter, and a list of areas with repeated reports
+- Comes with fake sample reports pre-loaded so the dashboard works straight away
+- `evaluate.py` measures the model on photos labeled by a human (see below)
+
+## Tech stack
+
+Python, Streamlit, Ultralytics YOLO (PyTorch), Pillow, SQLite, Folium (OpenStreetMap), pandas
+
+## Run it locally (Windows)
+
+Python 3.10 to 3.12 is recommended, because PyTorch can lag behind the newest Python versions.
+
+```
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+On first use of the Detect page, the app downloads a free pretrained pothole model from Hugging Face (`Samdutse/pothole-yolov8`). No account or API key is needed. If the download fails, download `best.pt` from that model's page and place it at `models/best.pt`. Check the model page for its license and training data before reusing it.
+
+## How severity is estimated
+
+Severity uses only **confirmed** detections (confidence 50% or more), and only two things: how much of the photo each pothole covers, and how many potholes there are.
+
+| Level | When |
+|---|---|
+| High | One pothole covers 10% or more of the photo, or two or more potholes are each at least 3%, or four or more potholes |
+| Medium | One pothole covers 3% or more, or there are two or more potholes |
+| Low | A single small pothole |
+| Unclear | No detection reaches 50% confidence, so a person should check the photo |
+
+Confidence is deliberately **not** used for severity. A pothole the model is 95% sure about can still be small. Confidence only decides which detections count and how reliable the estimate is.
+
+The thresholds (3%, 10%, 4 potholes) are starting values and have **not** been validated against human ratings yet.
+
+## Evaluating the model
+
+`evaluate.py` compares the model with boxes a human drew on test photos and reports precision, recall, F1, AP50, how often the model is right at each confidence level, results per photo type (rain, dark, multiple potholes, no potholes), and speed at different image sizes. It can also save review pictures that show the human boxes and the model boxes together.
+
+```
+python evaluate.py --selftest        check the maths without any photos
+python evaluate.py                   run the evaluation
+python evaluate.py --draft-labels    let the model draft labels for a human to correct
+```
+
+Test photos go in `test_data/images` and YOLO-format labels in `test_data/labels`. Name photos with their type first, for example `rain_01.jpg`.
+
+### Results
+
+Not final yet. To be filled in only after the full test:
+
+| Photos | Real potholes | AP50 | Precision / recall at cutoff [x] | Image size |
+|---|---|---|---|---|
+| [N] | [N] | [value] | [value] | 640 |
+
+## Known limitations
+
+- **Locations are self-reported.** Anyone can type any coordinates, and photo GPS can be edited, so reported locations are not verified.
+- **The locality suggestion needs internet.** Only the coordinates (never the photo) are sent to OpenStreetMap's free Nominatim service, which has a usage policy that rules out heavy traffic.
+- **The model can mistake patched or repaired road for a pothole.** This showed up in my own testing, so patched roads should get their own group in the evaluation.
+- **Severity comes from how large the pothole looks in the photo.** A close-up makes any pothole look bigger. A flat photo cannot show depth, so depth is never claimed. Road damage around the pothole is not considered.
+- **The model is pretrained, not trained by me.** My own work is the app, the severity rules, and the evaluation.
+- **Sample reports on the dashboard are fake**, added so the demo works from the start.
+- Reports are stored in a local SQLite file, so they do not survive on a typical cloud deployment. Persistent storage is planned.
+
+## Project structure
+
+```
+app.py             the Streamlit web app
+evaluate.py        evaluation script
+clean_reports.py   removes saved reports with a missing or out-of-area location
+requirements.txt   Python packages
+```

@@ -1,0 +1,28 @@
+# Virtual environment (every person creates their own)
+venv/
+.venv/
+
+# Python clutter
+__pycache__/
+*.pyc
+
+# Downloaded installer files (for example the opencv .whl you saved in the project folder)
+*.whl
+
+# Database and photos saved by the app while you test it
+*.db
+data/
+
+# Model weights (the app downloads them automatically on first run)
+models/
+
+# Test photos, labels and evaluation output stay on your laptop
+test_data/
+eval_results/
+
+# Secrets: never upload passwords or keys
+.env
+.streamlit/secrets.toml
+
+# Editor settings
+.vscode/
